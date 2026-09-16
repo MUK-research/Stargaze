@@ -24,6 +24,9 @@
   </section>
   <section><h2>02 / Cursor</h2>
     <label>Input <select id="input"><option value="mouse">Mouse / trackpad</option><option value="gaze">Calibrated webcam gaze</option></select></label>
+    <label>Camera source <select id="cameraDevice"><option value="">Browser default camera</option></select></label>
+    <button id="cameraRefresh" title="May briefly open a camera to request permission, then releases it">Allow / refresh cameras</button>
+    <p id="cameraDeviceStatus" class="small" role="status">Choose a webcam explicitly; the browser default may be a virtual camera.</p>
     <div class="row"><button id="camera">Start camera</button><button id="calibrate" disabled>Calibrate</button></div>
     <video id="video" muted playsinline autoplay hidden></video>
     <p id="gazeStatus" class="small" role="status">Mouse mode is ready. Webcam is off.</p>
@@ -32,10 +35,17 @@
     <div class="row"><label class="check"><input id="trail" type="checkbox" checked>Trace</label><label class="check"><input id="labels" type="checkbox" checked>Objects</label><button id="clear">Clear trace</button></div>
   </section>
   <section><h2>03 / Sound</h2>
-    <button id="midi">Connect MIDI</button>
-    <label>Piano output <select id="output"><option value="">No hardware output</option></select></label>
+    <div class="row"><button id="midi">Enable MIDI</button><button id="midiRefresh">Refresh outputs</button></div>
+    <label>MIDI note output <select id="output" disabled><option value="">Enable MIDI to list outputs</option></select></label>
+    <p id="midiDevicesStatus" class="small" role="status">MIDI not enabled. Hardware and virtual output ports are supported.</p>
+    <button id="midiTest" disabled title="Requires Arm sound and a selected MIDI output; sends one short note">Test MIDI note</button>
     <label class="check"><input id="preview" type="checkbox" checked>Browser sound preview</label>
     <p id="midiStatus" class="small" role="status">Sound is off until armed. No sustain messages are generated.</p>
+    <details id="midiHelp"><summary>No MIDI outputs? / Virtual routing</summary>
+      <p class="small">Use Chrome/Edge on localhost or HTTPS and allow MIDI access for this site. Ports must exist and be online in the operating system; no Disklavier is required. An input-only controller is not an output, and an installed plug-in alone is not a MIDI port.</p>
+      <p class="small"><strong>macOS:</strong> Audio MIDI Setup → Window → Show MIDI Studio → IAC Driver → Device is online. Add a bus such as “Ephemeris”, then press Refresh outputs here. In Ableton or another instrument app, use that same bus as a MIDI input. Enable Track and monitoring for the receiving instrument. Do not route its output back to the same bus.</p>
+      <p class="small"><a href="https://support.apple.com/guide/audio-midi-setup/ams1013/mac" target="_blank" rel="noopener">Apple IAC instructions ↗</a> · <a href="https://help.ableton.com/hc/en-us/articles/209774225-Setting-up-a-virtual-MIDI-bus" target="_blank" rel="noopener">Ableton virtual MIDI routing ↗</a></p>
+    </details>
     <details><summary>Musical mapping</summary>
       <div class="pair"><label>Lowest note<input id="minNote" type="number" min="21" max="96" value="48"></label><label>Highest note<input id="maxNote" type="number" min="33" max="108" value="84"></label></div>
       <div class="pair"><label>Soft velocity<input id="minVelocity" type="number" min="1" max="99" value="25"></label><label>Loud velocity<input id="maxVelocity" type="number" min="2" max="100" value="88"></label></div>

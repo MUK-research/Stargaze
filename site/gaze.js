@@ -2,6 +2,7 @@
  * Frames never leave the browser. No identity recognition or attention inference.
  */
 import {eyeFeatures,fitCalibration,predictGaze,validateCalibration} from './core.js';
+import {cameraConstraints,cameraError} from './cameras.js';
 const TRAIN=[[.12,.15],[.5,.15],[.88,.15],[.88,.5],[.5,.5],[.12,.5],[.12,.85],[.5,.85],[.88,.85]];
 const VALIDATE=[[.27,.28],[.73,.28],[.73,.72],[.27,.72],[.5,.4]];
 
@@ -13,9 +14,9 @@ export class GazeTracker {
     this.lastVideo=-1; this.lastFrame=0; this.latest=null; this.validation=null;
     this.calibration=null; this.raf=0; this.generation=0;
     this.processedFrames=0; this.validFrames=0; this.faceCount=0;
-    this.lastStatus=0; this.delegate=null;
+    this.lastStatus=0; this.delegate=null;this.cameraId='';this.cameraLabel='';
   }
-  async start() {
+  async start(deviceId='') {
     if(this.running || this.loading) return;
     if(!window.isSecureContext || !navigator.mediaDevices?.getUserMedia)
       throw new Error('Camera needs localhost or HTTPS. Open the Python server in Chrome/Edge.');
@@ -52,10 +53,13 @@ export class GazeTracker {
         worker.postMessage({type:'init'});
       });
       if(generation!==this.generation) return;
-      const stream=await navigator.mediaDevices.getUserMedia({
-        video:{width:640,height:480,facingMode:'user'},audio:false});
+      const stream=await navigator.mediaDevices.getUserMedia(cameraConstraints(deviceId));
       if(generation!==this.generation) {stream.getTracks().forEach(t=>t.stop());return;}
-      this.stream=stream; this.video.srcObject=stream; await this.video.play();
+      this.stream=stream;
+      const track=stream.getVideoTracks()[0];
+      this.cameraId=track?.getSettings?.().deviceId||deviceId;
+      this.cameraLabel=track?.label||'Selected camera';
+      this.video.srcObject=stream; await this.video.play();
       if(generation!==this.generation) return;
       this.running=true; this.loading=false; this.lastVideo=-1;this.lastFrame=0;
       this.processedFrames=0;this.validFrames=0;this.faceCount=0;
@@ -67,7 +71,7 @@ export class GazeTracker {
     } catch(error) {
       // A cancelled, old startup must not stop a newer camera instance.
       if(generation!==this.generation) return;
-      this.stop(`Camera unavailable: ${error.message}`);throw error;
+      const detail=cameraError(error);this.stop(`Camera unavailable: ${detail}`);throw new Error(detail);
     }
   }
   stop(reason='Camera off.') {
@@ -76,7 +80,7 @@ export class GazeTracker {
     this.rejectStart?.(new Error('Camera startup cancelled.'));this.rejectStart=null;
     this.worker?.terminate();this.worker=null;this.pendingFrame=false;
     this.stream?.getTracks().forEach(t=>t.stop()); this.stream=null;
-    this.video.srcObject=null;
+    this.video.srcObject=null;this.cameraId='';this.cameraLabel='';
     this.latest=null;this.model=null;this.validation=null;this.calibration=null;
     this.onSample(null);this.onStatus(reason);
   }

@@ -7,6 +7,7 @@ on:
       - catalog.py
       - tools/browser_smoke.py
       - tools/camera_smoke.py
+      - tools/devices_smoke.py
       - .github/workflows/browser.yml
   workflow_dispatch:
 permissions:
@@ -35,6 +36,9 @@ jobs:
       - name: Real MediaPipe lifecycle with synthetic camera
         if: always()
         run: python tools/camera_smoke.py
+      - name: Camera and arbitrary MIDI output selectors (synthetic devices)
+        if: always()
+        run: python tools/devices_smoke.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

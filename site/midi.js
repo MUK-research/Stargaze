@@ -1,32 +1,81 @@
 /** Explicitly armed, monophonic output with conservative Disklavier defaults. */
 import {clamp} from './core.js';
 
+export function midiAccessError(error) {
+  if(['NotAllowedError','SecurityError'].includes(error?.name))
+    return 'MIDI permission denied. Allow MIDI for this site in the browser, then press Enable MIDI / Refresh outputs.';
+  if(error?.name==='NotSupportedError')
+    return 'This browser or operating system does not provide MIDI access. Use desktop Chrome/Edge or browser preview.';
+  return `MIDI access failed: ${error?.message||String(error)}. Check the OS MIDI setup and refresh outputs.`;
+}
+
+
 export class SoundEngine {
   constructor(log=()=>{}) {
     this.log=log; this.armed=false; this.output=null; this.ccOutput=null;
     this.access=null; this.channel=0; this.active=null; this.lastOn=-Infinity;
     this.audio=null; this.generation=0; this.preview=true; this.onState=()=>{};
+    this.outputId='';this.ccOutputId='';this.midiState='idle';this.midiError='';this.connecting=null;
   }
   async connect() {
-    if(!navigator.requestMIDIAccess) throw new Error('Web MIDI is unavailable. Use desktop Chrome/Edge, or browser preview.');
-    this.access=await navigator.requestMIDIAccess({sysex:false});
-    this.access.onstatechange=()=>{
-      if(this.output && this.output.state==='disconnected') {
-        this.panic('MIDI disconnected'); this.output=null;
+    if(this.connecting) return this.connecting;
+    this.connecting=this.refreshAccess();
+    try {return await this.connecting;} finally {this.connecting=null;}
+  }
+  async refreshAccess() {
+    this.panic('Refreshing MIDI outputs');
+    this.midiError='';this.midiState='requesting';this.onState();
+    try {
+      if(globalThis.isSecureContext===false) throw new Error('Web MIDI needs localhost or HTTPS.');
+      if(!globalThis.navigator?.requestMIDIAccess) {
+        const e=new Error('Web MIDI unavailable');e.name='NotSupportedError';throw e;
       }
-      if(this.ccOutput && this.ccOutput.state==='disconnected') this.ccOutput=null;
-      this.onState();
-    };
-    return [...this.access.outputs.values()];
+      // No device-name/manufacturer filtering. Request software synth exposure too
+      // where supported. Virtual OS destinations (e.g. IAC) are ordinary ports.
+      const access=await navigator.requestMIDIAccess({sysex:false,software:true});
+      if(this.access) this.access.onstatechange=null;
+      this.access=access;this.midiState='ready';
+      access.onstatechange=()=>this.syncPorts();
+      this.syncPorts();
+      return this.outputs();
+    } catch(error) {
+      if(this.access) this.access.onstatechange=null;
+      this.access=null;this.output=null;this.ccOutput=null;
+      this.midiState=['NotAllowedError','SecurityError'].includes(error?.name)?'denied':'error';
+      this.midiError=midiAccessError(error);this.onState();throw new Error(this.midiError);
+    }
   }
   outputs() { return this.access?[...this.access.outputs.values()]:[]; }
+  inputs() { return this.access?.inputs?[...this.access.inputs.values()]:[]; }
+  available(id) {return this.outputs().find(p=>p.id===id && p.state!=='disconnected')||null;}
+  syncPorts() {
+    const next=this.available(this.outputId),cc=this.available(this.ccOutputId);
+    // Preserve chosen IDs for reconnect, but do not silently change route or re-arm.
+    if((this.output && this.output!==next)||(this.ccOutput && this.ccOutput!==cc))
+      this.panic('MIDI destination disconnected or changed');
+    this.output=next;this.ccOutput=cc;this.onState();
+  }
   select(id,channel=1) {
+    const next=id?this.available(id):null;
+    if(id&&!next) throw new Error('That MIDI output is unavailable. Refresh outputs or choose another destination.');
     this.panic('Output changed');
-    this.output=this.outputs().find(p=>p.id===id)||null;
-    this.channel=clamp(Math.round(channel)-1,0,15);
+    this.outputId=id;this.output=next;
+    this.channel=clamp(Math.round(channel)-1,0,15);this.onState();
+  }
+  selectCC(id) {
+    const next=id?this.available(id):null;
+    if(id&&!next) throw new Error('That colour output is unavailable. Refresh outputs or choose another destination.');
+    this.panic('Colour output changed');this.ccOutputId=id;this.ccOutput=next;this.onState();
   }
   async arm() {
     const generation=++this.generation;
+    if(this.midiState==='requesting') throw new Error('Wait for MIDI discovery to finish before arming.');
+    if(this.outputId && (!this.output || this.output.state==='disconnected'))
+      throw new Error('The selected MIDI output is unavailable. Reconnect it or select None to use preview only.');
+    if(this.output) {
+      try {await this.output.open?.();}
+      catch(error) {this.panic('MIDI output could not open');throw new Error(`Cannot open MIDI output: ${error.message}`);}
+    }
     if(this.preview) {
       const Context=window.AudioContext||window.webkitAudioContext;
       if(!Context) throw new Error('Browser audio unavailable; select MIDI and disable preview.');

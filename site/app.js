@@ -1,6 +1,7 @@
 import {VERSION,defaults,clamp,RegionGate,mapStar,horizontal} from './core.js';
 import {SoundEngine} from './midi.js';
 import {GazeTracker} from './gaze.js';
+import {CameraDevices} from './cameras.js';
 
 const $=id=>document.getElementById(id), stage=$('stage'), canvas=$('overlay'), ctx=canvas.getContext('2d');
 const config={...defaults};
@@ -19,6 +20,12 @@ const log=e=>{
   session.events.push({t_ms:Math.round(performance.now()-t0),utc:new Date().toISOString(),...e});
 };
 const sound=new SoundEngine(log);
+const cameras=new CameraDevices();
+let cameraChoice={id:'',label:''};
+try {
+  const saved=JSON.parse(localStorage.getItem('ephemeris.camera.v1')||'null');
+  if(saved && typeof saved.id==='string' && typeof saved.label==='string') cameraChoice=saved;
+} catch {}
 const gaze=new GazeTracker($('video'),point=>{
   gazePoint=point;
   if(!point){smoothed=null;if($('input').value==='gaze')breakInput('tracking unavailable');}
@@ -30,6 +37,7 @@ const gaze=new GazeTracker($('video'),point=>{
     $('video').hidden=!gaze.running;
     if(!gaze.running)$('calibration').hidden=true;
   }
+  updateCameraStatus();
 });
 
 function breakTrace(){if(!broken){segment++;broken=true;}cursor=null;}
@@ -46,16 +54,65 @@ function updateTransport(){
   $('arm').textContent=sound.armed?'Disarm':'Arm sound';
   $('midiStatus').textContent=sound.armed?
     `Armed · ${sound.output?.name||'browser preview'} · channel ${config.channel} · one strike per visit`:
-    `Silent · ${sound.output?.name||'no hardware selected'} · preview ${sound.preview?'on':'off'}`;
+    `Silent · ${sound.output?.name||'no MIDI output selected'} · preview ${sound.preview?'on':'off'}`;
+  $('midiTest').disabled=!sound.armed || !sound.output;
 }
 function rebuildPorts(){
-  for(const [id,selected,none] of [['output',sound.output?.id,'No hardware output'],['ccOutput',sound.ccOutput?.id,'No CC destination']]){
-    const element=$(id);element.replaceChildren(new Option(none,''));
-    for(const p of sound.outputs()) if(p.state!=='disconnected')element.add(new Option(p.name||p.id,p.id));
-    element.value=selected||'';
+  const ports=sound.outputs(),enabled=Boolean(sound.access),busy=sound.midiState==='requesting';
+  for(const [id,selected,none] of [['output',sound.outputId,'None · preview only'],['ccOutput',sound.ccOutputId,'No CC destination']]){
+    const element=$(id);element.replaceChildren(new Option(enabled?none:'Enable MIDI to list outputs',''));
+    ports.forEach((p,i)=>{
+      const offline=p.state==='disconnected';
+      // Do not filter on connection="closed": such ports are available to open.
+      const label=`${p.name||'Unnamed output '+(i+1)}${p.manufacturer?' · '+p.manufacturer:''}${offline?' (offline)':''}`;
+      const option=new Option(label,p.id);option.disabled=offline;element.add(option);
+    });
+    if(selected&&!ports.some(p=>p.id===selected)) {
+      const option=new Option('Previously selected output (unavailable)',selected);option.disabled=true;element.add(option);
+    }
+    element.value=selected||'';element.disabled=!enabled||busy;
   }
+  const count=ports.filter(p=>p.state!=='disconnected').length;
+  const inputs=sound.inputs().filter(p=>p.state!=='disconnected').length;
+  $('midi').disabled=busy;$('midiRefresh').disabled=busy;
+  $('midi').textContent=busy?'Discovering…':enabled?'MIDI enabled':'Enable MIDI';
+  $('midiDevicesStatus').textContent=busy?'Requesting MIDI access and listing outputs…':
+    sound.midiError||(!enabled?'MIDI not enabled. Hardware and virtual output ports are supported.':
+    `${count} output port${count===1?'':'s'} · ${inputs} input port${inputs===1?'':'s'}. `+
+    (!count?'No output ports exposed by the browser. Enable a virtual bus or connect an interface; see Virtual routing below.':
+      sound.outputId&&!sound.output?'Selected output unavailable. Reconnect it or choose another; sound stays disarmed.':
+      'All available output ports are listed; no Disklavier is required.'));
 }
 sound.onState=()=>{updateTransport();rebuildPorts();};
+function updateCameraStatus(){
+  $('cameraDeviceStatus').textContent=gaze.running?
+    `Active camera: ${gaze.cameraLabel}. Switching sources stops tracking and requires recalibration.`:
+    cameraChoice.id&&!cameras.devices.some(d=>d.id===cameraChoice.id)?
+      `Saved camera unavailable or permission required: ${cameraChoice.label||'selected webcam'}. Refresh and choose a source; no automatic substitution.`:
+      `${cameras.devices.length} camera source${cameras.devices.length===1?'':'s'} listed. `+
+      (cameraChoice.id?`Selected: ${cameraChoice.label}.`:'Browser default may be OBS; choose your webcam explicitly.')+
+      (cameras.warning?' '+cameras.warning:'');
+}
+function rebuildCameras(){
+  const element=$('cameraDevice');element.replaceChildren(new Option('Browser default camera',''));
+  for(const d of cameras.devices) element.add(new Option(d.label,d.id));
+  if(cameraChoice.id&&!cameras.devices.some(d=>d.id===cameraChoice.id)) {
+    const option=new Option(`${cameraChoice.label||'Saved camera'} (unavailable / permission needed)`,cameraChoice.id);
+    option.disabled=true;element.add(option);
+  }
+  element.value=cameraChoice.id;updateCameraStatus();
+}
+async function refreshCameras(requestPermission=false){
+  $('cameraRefresh').disabled=true;
+  try {
+    await cameras.refresh({requestPermission,selectedId:cameraChoice.id,activeStream:gaze.stream});
+    if(gaze.running&&gaze.cameraId&&!cameras.devices.some(d=>d.id===gaze.cameraId)) {
+      panic('Camera disconnected');gaze.stop('Selected camera disconnected. Choose a camera and recalibrate.');
+    }
+    rebuildCameras();
+  } catch(error) {$('cameraDeviceStatus').textContent=error.message;}
+  finally {$('cameraRefresh').disabled=false;}
+}
 function observationTime(){
   if($('now').checked)return new Date();
   const date=new Date($('fixedTime').value+'Z');
@@ -220,9 +277,23 @@ window.addEventListener('pointerup',()=>{if(dragging){dragging=false;resetView()
 stage.addEventListener('wheel',resetView,{passive:true});
 $('arm').onclick=async()=>{try{if(sound.armed){panic('Disarmed');return;}if(!ready)throw new Error('Wait for the sky viewer to load.');if($('input').value==='gaze'&&!gaze.validation?.passed)throw new Error('Calibrate and validate gaze first.');if(!observationTime())throw new Error('Choose a valid observation time.');if(!setConfig())return;gate.reset();await sound.arm();message('Armed · enter an object region and dwell to play.');}catch(e){message(e.message);}};
 $('panic').onclick=()=>panic();
-$('midi').onclick=async()=>{try{await sound.connect();rebuildPorts();message('Choose the piano output explicitly, then arm sound.');}catch(e){message(e.message);}};
-$('output').onchange=()=>{sound.select($('output').value,config.channel);gate.reset();updateTransport();rebuildPorts();};
-$('ccOutput').onchange=()=>{const id=$('ccOutput').value;panic('CC output changed');sound.ccOutput=sound.outputs().find(p=>p.id===id)||null;rebuildPorts();};
+const connectMidi=async()=>{
+  try {await sound.connect();message(sound.outputs().some(p=>p.state!=='disconnected')?
+    'Select any MIDI output, physical or virtual; then arm sound.':'No MIDI output ports available. Open Virtual routing for setup instructions.');}
+  catch(e){message(e.message);}
+};
+$('midi').onclick=connectMidi;$('midiRefresh').onclick=connectMidi;
+$('output').onchange=()=>{try{sound.select($('output').value,config.channel);gate.reset();}catch(e){message(e.message);rebuildPorts();}};
+$('ccOutput').onchange=()=>{try{sound.selectCC($('ccOutput').value);gate.reset();}catch(e){message(e.message);rebuildPorts();}};
+$('midiTest').onclick=()=>{
+  if(!sound.armed||!sound.output){message('Choose a MIDI output and arm sound before testing.');return;}
+  gate.reset();breakTrace();
+  try {
+    const sent=sound.play({note:clamp(60,config.minNote,config.maxNote),velocity:Math.min(45,config.maxVelocity),duration:350,color:{value:null}},
+      {...config,sendCC:false},'test-note');
+    message(sent?`Test note sent to ${sound.output.name||sound.output.id} · channel ${config.channel}`:'Test not sent: attack-rate limit. Press again after a short pause.');
+  }catch(e){panic(e.message);}
+};
 $('input').onchange=()=>{panic('Input changed');gazePoint=null;smoothed=null;if($('input').value==='gaze'&&!gaze.validation?.passed)message('Start the camera and complete calibration first.');};
 for(const key of ['latitude','longitude','radius','dwell','minNote','maxNote','minVelocity','maxVelocity','duration','channel','root','colorCC','sendCC','horizonOnly','preview']){
   $(key).addEventListener('change',()=>{panic('Settings changed');setConfig();sound.channel=config.channel-1;});
@@ -241,11 +312,19 @@ $('manualAdd').onclick=()=>{
   if(session.samples.at(-1)?.source!=='manual')breakTrace();
   appendPoint(ra%360,dec,null,null,'manual',performance.now());message('Manual ICRS point added to the sky trace.');
 };
+$('cameraRefresh').onclick=()=>refreshCameras(true);
+$('cameraDevice').onchange=()=>{
+  const id=$('cameraDevice').value;
+  cameraChoice={id,label:cameras.devices.find(d=>d.id===id)?.label||''};
+  try {localStorage.setItem('ephemeris.camera.v1',JSON.stringify(cameraChoice));} catch {}
+  panic('Camera source changed');gaze.stop('Camera source changed. Press Start camera, then recalibrate.');rebuildCameras();
+};
+navigator.mediaDevices?.addEventListener?.('devicechange',()=>refreshCameras());
 $('camera').onclick=async()=>{
   panic('Camera mode changed');
   if(gaze.running){gaze.stop();$('video').hidden=true;$('camera').textContent='Start camera';$('calibrate').disabled=true;return;}
   $('camera').disabled=true;
-  try{await gaze.start();$('video').hidden=!gaze.running;$('camera').textContent=gaze.running?'Stop camera':'Start camera';$('calibrate').disabled=!gaze.running;}
+  try{await gaze.start(cameraChoice.id);await refreshCameras();$('video').hidden=!gaze.running;$('camera').textContent=gaze.running?'Stop camera':'Start camera';$('calibrate').disabled=!gaze.running;}
   catch(e){message(e.message);$('gazeStatus').textContent=e.message;}
   finally{$('camera').disabled=false;}
 };
@@ -305,8 +384,11 @@ async function init(){
   message('Mouse mode · real survey imagery · arm sound when ready');
   window.ephemeris={getState:()=>({ready,api,armed:sound.armed,catalogueCount:catalogue.length,
     gaze:{running:gaze.running,loading:gaze.loading,frames:gaze.processedFrames,
-      validFrames:gaze.validFrames,faceCount:gaze.faceCount,delegate:gaze.delegate},
+      validFrames:gaze.validFrames,faceCount:gaze.faceCount,delegate:gaze.delegate,
+      cameraId:gaze.cameraId,cameraLabel:gaze.cameraLabel},
+    midi:{state:sound.midiState,outputId:sound.outputId,availableOutputs:sound.outputs().filter(p=>p.state!=='disconnected').length},
     current:gate.current?.star.id||null,sampleCount:session.samples.length,events:session.events.slice(-100),
     projected:catalogue.map(star=>({id:star.id,xy:pixel(star.ra,star.dec)})).filter(p=>p.xy)})};
 }
+rebuildPorts();rebuildCameras();refreshCameras();
 init().catch(error=>{$('loading').replaceChildren();const h=document.createElement('h2');h.textContent='Sky viewer unavailable';const p=document.createElement('p');p.textContent=error.message;$('loading').append(h,p);message(error.message);console.error(error);});
