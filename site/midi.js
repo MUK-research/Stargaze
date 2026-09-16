@@ -134,6 +134,10 @@ export class SoundEngine {
   release(reason='exit') {
     const a=this.active;
     if(!a) return;
+    // The explicit routing test is clicked outside the sky, so it must not be
+    // cut off just because there is no gaze/mouse cursor. Stop, blur, device
+    // changes, new notes and its short duration still release it normally.
+    if(a.objectId==='test-note' && ['cursor unavailable','tracking unavailable','pointer left sky'].includes(reason)) return;
     this.active=null; clearTimeout(a.timer);
     try { a.output?.clear(); this.send(a.output,[0x80+a.ch,a.note,0]); } catch {}
     if(a.osc && this.audio) {

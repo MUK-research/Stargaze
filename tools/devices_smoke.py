@@ -5,6 +5,7 @@ Run app.py first. This does not test physical hardware or OS-level IAC routing.
 import argparse
 import json
 import shutil
+import traceback
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 from browser_smoke import MOCK_SKY
@@ -98,7 +99,8 @@ def main():
             page.evaluate("window.fixtureCameras=window.fixtureCameras.filter(d=>d.deviceId!=='obs-fixture');navigator.mediaDevices.dispatchEvent(new Event('devicechange'))")
             page.wait_for_function('!window.ephemeris.getState().gaze.running')
             assert page.locator('#cameraDevice').input_value()=='obs-fixture'
-            assert page.locator('#cameraDevice option:checked').is_disabled()
+            page.wait_for_function("document.querySelector('#cameraDevice option:checked')?.disabled === true")
+            assert page.locator('#cameraDevice option:checked').evaluate('(option)=>option.disabled'), 'Unavailable camera option must remain disabled'
             report['checks'].append('Removed camera remains visibly unavailable; no fallback to a different source')
             page.locator('#cameraDevice').select_option('webcam-fixture')
             page.reload(wait_until='domcontentloaded');page.wait_for_function('window.ephemeris?.getState().ready')
@@ -123,11 +125,13 @@ def main():
             messages=page.evaluate('window.midiMessages')
             assert any(m['id']=='iac' and m['data'][0]==0x90 for m in messages)
             assert any(m['id']=='iac' and m['data'][0]==0x80 and m.get('time') for m in messages)
-            report['checks'].append('Closed virtual output opens on arm; explicit test note reaches it with a scheduled note-off')
+            page.wait_for_timeout(120)
+            assert not any(e['kind']=='note_off' and e.get('objectId')=='test-note' for e in page.evaluate('window.ephemeris.getState().events')), 'Routing test was cut off by the absent sky cursor'
+            report['checks'].append('Closed virtual output opens on arm; explicit test note reaches it with a scheduled note-off and survives passive cursor loss')
             page.evaluate("window.removeOutput('iac')")
             assert not page.evaluate('window.ephemeris.getState().armed')
             assert page.locator('#output').input_value()=='iac'
-            assert page.locator('#output option:checked').is_disabled()
+            assert page.locator('#output option:checked').evaluate('(option)=>option.disabled'), 'Disconnected MIDI option must remain disabled'
             page.evaluate("window.addOutput('iac','IAC Driver Ephemeris')")
             assert not page.evaluate('window.ephemeris.getState().armed')
             assert page.locator('#output').input_value()=='iac'
@@ -142,7 +146,7 @@ def main():
             assert not report['errors'],report['errors']
             report['passed']=True
         except Exception as error:
-            report['passed']=False;report['failure']=str(error);raise
+            report['passed']=False;report['failure']=repr(error);report['traceback']=traceback.format_exc();raise
         finally:
             (output/'report.json').write_text(json.dumps(report,indent=2)+'\n')
             print(json.dumps(report,indent=2))

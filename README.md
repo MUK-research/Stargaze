@@ -24,6 +24,14 @@ Start with **Mouse / trackpad** and **Browser sound preview**. The Pleiades fiel
 
 **Load objects in view** queries SIMBAD around the view centre. A bundled, provenance-labelled SIMBAD snapshot contains 72 objects across the Pleiades, Orion and Andromeda fields, so these examples do not depend on a successful live catalogue query. Survey imagery and external libraries still require internet access. The catalogue is intentionally limited: not every visible speck is identified, and blank catalogue coverage is not an empty sky.
 
+## Camera and MIDI device selection
+
+Use **Camera source** to choose your actual webcam rather than the browser default (which may be OBS). **Allow / refresh cameras** reveals device names after permission; it may briefly open and release a camera for that permission request. The chosen camera is remembered in this browser. Changing it stops tracking and clears calibration; press **Start camera → Calibrate** again.
+
+**Enable MIDI → MIDI note output** lists all output ports exposed by the browser, physical or virtual, without requiring a Disklavier. **Refresh outputs** rescans; the list also follows device-connect/disconnect events. A selected destination stays selected on refresh, but output stays disarmed after a disconnect. **Arm sound → Test MIDI note** sends one short note to check routing. It does not send a note merely by scanning or selecting a device.
+
+An empty list now distinguishes missing permission from zero output ports or input-only devices. For a virtual destination on macOS, enable **IAC Driver → Device is online** in **Audio MIDI Setup → Window → Show MIDI Studio**, create a bus, and refresh outputs. Choose that bus as the input in your receiving instrument app. See [camera/MIDI setup and troubleshooting](docs/device-routing.md), also available through the interface's **No MIDI outputs? / Virtual routing** section.
+
 ## Webcam gaze
 
 Press **Start camera → Calibrate**. Look at each of the nine dots and press **Space** to capture it, keeping your head comfortably still. Five separate validation dots follow. A passing result enables gaze mode and reports the held-out error in screen pixels. Check that the cursor broadly follows your eyes before arming sound.
@@ -34,7 +42,7 @@ Camera processing stays in a separate worker in the browser. The status display 
 
 ## Disklavier / MIDI
 
-Connect the instrument through its available MIDI interface, press **Connect MIDI**, explicitly choose its output and check the MIDI channel. Disable browser preview when using the piano alone. Start with the conservative default note range **48–84**, velocities **25–88**, and a short note length. Then arm sound.
+Connect the instrument through its available MIDI interface, press **Enable MIDI**, explicitly choose its output and check the MIDI channel. Disable browser preview when using the piano alone. Start with the conservative default note range **48–84**, velocities **25–88**, and a short note length. Then arm sound.
 
 The prototype is monophonic, with at most four attacks per second, one strike per region visit, timed note-offs, note-offs on exit, and automatic disarming on window blur or hidden tabs. There is no automatic sustain-on. **Stop / Esc** also sends sustain-off, all-sound-off and all-notes-off on the selected channel. These are software safeguards, not a substitute for testing the physical instrument at low dynamics. Hardware behaviour and instrument-specific routing still need a local check.
 

@@ -38,3 +38,7 @@ Finally select the physical Disklavier output and channel explicitly. Begin at l
 `python3 tools/camera_smoke.py` uses the **real pinned MediaPipe runtime and model** with Chromium's synthetic camera. It verifies worker startup, receipt of processed frames, opening/cancelling calibration, releasing the stream and restarting after teardown. A synthetic pattern is not a human participant: a passing result establishes runtime/lifecycle integration, not landmark accuracy, gaze calibration accuracy or physical-camera compatibility.
 
 The new `tests/gaze.test.js` also checks a complete nine-target training / five-target held-out validation sequence with synthetic features, rejection of absent samples, suppression of stale/multi-face results and worker/stream cleanup. These complement, rather than replace, a participant test at the final screen position.
+
+## Camera and MIDI selector regression
+
+Run `python3 tools/devices_smoke.py` with the server already running. This test uses two named camera fixtures (OBS and a built-in webcam), synthetic Chromium video, a fake inference worker, mock sky imagery and arbitrary mock MIDI output ports. It checks exact camera selection, persistence without automatic capture, source switching/removal, virtual outputs with a closed connection, explicit test notes, device refresh/reconnection and permission denial. No physical device, human gaze accuracy or native macOS IAC route is claimed by this test. Its report is separate from the real-library camera test.
