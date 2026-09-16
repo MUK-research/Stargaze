@@ -1,0 +1,78 @@
+{
+  "schema": "ephemeris.validation/1",
+  "date": "2026-09-16",
+  "tested_commit": "5fbad5b59f3fa2a79d29d0ebc956b592be567206",
+  "unit_api": {
+    "passed": true,
+    "python_tests": 13,
+    "javascript_tests": 25,
+    "total": 38,
+    "ci_run": "https://github.com/AdrianArtacho/Ephemeris/actions/runs/35077913219"
+  },
+  "browser_run": "https://github.com/AdrianArtacho/Ephemeris/actions/runs/35077913450",
+  "artifact_id": 10439410957,
+  "reports": {
+    "real-sky": {
+      "sky": "real Aladin / real survey network",
+      "midi": "mock output; no Disklavier attached",
+      "camera": "not exercised",
+      "checks": [
+        "viewer initialised; catalogue loaded",
+        "mouse dwell produced browser preview note and sky-coordinate trace",
+        "selected mock MIDI output received note-on and scheduled note-off",
+        "Escape disarmed transport",
+        "session JSON export includes samples and events, no face features",
+        "manual coordinates form their own continuous sky-trace segment",
+        "uncalibrated gaze cannot arm",
+        "real astronomical survey tiles fetched"
+      ],
+      "errors": [],
+      "passed": true
+    },
+    "mock-sky": {
+      "sky": "mock",
+      "midi": "mock output; no Disklavier attached",
+      "camera": "not exercised",
+      "checks": [
+        "viewer initialised; catalogue loaded",
+        "mouse dwell produced browser preview note and sky-coordinate trace",
+        "selected mock MIDI output received note-on and scheduled note-off",
+        "Escape disarmed transport",
+        "session JSON export includes samples and events, no face features",
+        "manual coordinates form their own continuous sky-trace segment",
+        "uncalibrated gaze cannot arm"
+      ],
+      "errors": [],
+      "passed": true
+    },
+    "camera": {
+      "camera_source": "Chromium synthetic test pattern, not a person",
+      "landmarker": "real MediaPipe Tasks Vision 0.10.21 / Face Landmarker model v1",
+      "participant_gaze_accuracy": "not tested",
+      "checks": [
+        "real MediaPipe runtime/model loaded in classic worker and processed at least three synthetic video frames",
+        "calibration screen starts, remains silent and cancels cleanly",
+        "stop camera releases the video stream and disables calibration",
+        "camera restarts after full worker/stream teardown"
+      ],
+      "errors": [],
+      "console": [
+        "Access to fetch at 'https://irsa.ipac.caltech.edu/data/hips/CDS/DSS2/color/properties' from origin 'http://127.0.0.1:8765' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+        "Failed to load resource: net::ERR_FAILED",
+        "INFO: Created TensorFlow Lite XNNPACK delegate for CPU.",
+        "INFO: Created TensorFlow Lite XNNPACK delegate for CPU."
+      ],
+      "worker_state": {
+        "running": true,
+        "loading": false,
+        "frames": 5,
+        "validFrames": 0,
+        "faceCount": 0,
+        "delegate": "GPU"
+      },
+      "passed": true,
+      "status_text": "Camera off."
+    }
+  },
+  "scope": "No human gaze accuracy or physical Disklavier validation. Synthetic camera and mock MIDI are explicitly labelled."
+}

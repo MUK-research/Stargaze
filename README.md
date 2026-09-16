@@ -4,6 +4,10 @@
 
 A first playable prototype of Adrián Artacho's *Stargaze*: explore real astronomical survey images, move a cursor with the mouse or calibrated webcam gaze, and let encounters with catalogue objects produce MIDI for a Disklavier or an electronic instrument.
 
+## Status and deliverables
+
+The camera startup has been revised to use a separate browser worker. See the [versioned validation and handover report](artifacts/validation-v0.1-r2.md) for exactly what has been tested and what still needs a local webcam / Disklavier check. The earlier [implementation note](artifacts/implementation-v0.1.md) remains unchanged. Tracked-source ZIPs can be built through the **Prototype package** GitHub Actions workflow; the application itself still needs no build step.
+
 ## Run
 
 Python **3.10+**, an internet connection and a desktop browser are enough. No Python packages or JavaScript build step are required.
@@ -26,7 +30,7 @@ Press **Start camera → Calibrate**. Look at each of the nine dots and press **
 
 This is **an experimental, participant-calibrated gaze estimate**, not MediaPipe-provided gaze and not a measurement of attention. Lighting, glasses, camera position and head movement can substantially affect it. A failed validation keeps mouse mode available. Resizing or entering fullscreen invalidates calibration. Blinks, a missing face, multiple detected faces, stale samples and out-of-screen estimates suppress interaction. Use larger regions for coarse control.
 
-Camera processing stays in the browser. No webcam frames are uploaded or included in exports. Library/model downloads and astronomical service requests still contact third-party servers.
+Camera processing stays in a separate worker in the browser. The status display distinguishes missing faces, unclear eyes and overly slow frames. No webcam frames are uploaded or included in exports. Library/model downloads and astronomical service requests still contact third-party servers.
 
 ## Disklavier / MIDI
 

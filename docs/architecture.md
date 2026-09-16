@@ -2,7 +2,7 @@
 
 ## Separate data, perception and sound
 
-The browser runs Aladin Lite 3.8.2, MediaPipe Tasks Vision 0.10.21 (Face Landmarker model v1), participant-specific ridge regression, region selection, trace rendering, browser audio and Web MIDI. Python serves `site/` and proxies bounded public SIMBAD TAP queries. There is no video streaming to Python and no identification of faces.
+Aladin Lite 3.8.2, participant-specific ridge regression, region selection, trace rendering, browser audio and Web MIDI run on the browser main thread. MediaPipe Tasks Vision 0.10.21 (Face Landmarker model v1) runs in a separate worker. Python serves `site/` and proxies bounded public SIMBAD TAP queries. There is no video streaming to Python and no identification of faces.
 
 The pipeline is: camera landmarks → calibration → estimated screen point → Aladin `pix2world` → ICRS cursor position. Separately, catalogue object ICRS coordinates pass through Aladin `world2pix` for screen-space region selection. A short dwell chooses one object; its catalogue attributes and local horizontal position determine the musical mapping. Mouse input exercises the identical downstream path without camera uncertainty.
 
@@ -12,7 +12,7 @@ Camera/video coordinates remain unmirrored for the estimator. Only the preview v
 
 MediaPipe supplies facial/iris landmarks, not a point of regard. Features comprise two iris centres relative to rotated eye axes, face position/scale, nose-position and roll proxies, and a few second-order eye terms. Ridge regression learns screen x/y from nine targets. Five different targets provide held-out validation. The displayed error is target-level screen RMS, not measured angular eye-tracking accuracy. The gross acceptance threshold is 18% of viewport diagonal: deliberately permissive for an artistic prototype, not a scientific quality criterion. The displayed region radius increases with validation error, up to 250 CSS pixels.
 
-No face, multiple detected faces, high blink scores, a collapsed eye aperture, stale frames (>200 ms), or out-of-viewport predictions suppress selection and release notes. A ~65 ms display smoother trades immediacy for cursor stability. Processing is throttled to at most about 22 Hz and currently runs on the main browser thread. A worker or dedicated eye-tracker adapter is a possible performance upgrade. Neither this sampling rate nor this estimator supports claims of valid physiological saccade/fixation measurement. Looking at an object also does not prove attention to it.
+No face, multiple detected faces, high blink scores, a collapsed eye aperture, stale frames (>200 ms), or out-of-viewport predictions suppress selection and release notes. A ~65 ms display smoother trades immediacy for cursor stability. Processing is throttled to at most about 22 Hz and runs in a dedicated classic Web Worker (`site/vision-worker.js`). The pinned MediaPipe API is dynamically imported there, and its WASM bootstrap is executed with `importScripts`, isolating it from the sky viewer. Only one transferable ImageBitmap is in flight; each is closed after inference. Original capture timestamps reject results more than 200 ms old rather than treating delayed results as fresh gaze. A dedicated eye-tracker adapter remains a possible accuracy upgrade. Neither this sampling rate nor this estimator supports claims of valid physiological saccade/fixation measurement. Looking at an object also does not prove attention to it.
 
 ## Astronomical conventions
 
@@ -50,3 +50,7 @@ Third-party downloads and sky-data requests reveal ordinary network/request meta
 - Horizontal-frame convention: https://docs.astropy.org/en/stable/api/astropy.coordinates.AltAz.html
 - MIDI messages: https://midi.org/summary-of-midi-1-0-messages
 - MIDI controllers: https://midi.org/midi-1-0-control-change-messages
+
+## Camera lifecycle revision (16 September 2026)
+
+The initial main-thread bootstrap failed with `ModuleFactory not set` in the browser integration test. The worker revision imports the verified `vision_bundle.mjs` API inside a classic worker and explicitly executes the WASM-loader path returned by `FilesetResolver` with `importScripts` before each creation attempt. This publishes `ModuleFactory` on the worker global without modifying upstream library files. GPU inference is attempted first, with an explicit CPU fallback and both error messages retained if startup fails. Downloads time out, stop terminates the worker and releases the camera, pending starts are cancelled without affecting a later instance, and hardware disconnection resets calibration. The interface reports missing faces, multiple faces, unclear eyes and overly delayed frames. Aggregate frame counts are exposed in the diagnostic state; no images or face-landmark arrays are exported.
