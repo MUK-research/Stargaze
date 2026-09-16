@@ -75,12 +75,22 @@ def main():
             report['checks'].append('selected mock MIDI output received note-on and scheduled note-off')
             page.keyboard.press('Escape');assert not page.evaluate('window.ephemeris.getState().armed')
             report['checks'].append('Escape disarmed transport')
+            page.locator('summary').filter(has_text='Coordinates & export').click()
             with page.expect_download() as info:page.locator('#exportJson').click()
-            download=info.value;download.save_as(output/'session-test.json')
+            info.value.save_as(output/'session-test.json')
             session=json.loads((output/'session-test.json').read_text())
             assert session['schema']=='ephemeris.session/1' and session['samples']
             assert 'features' not in json.dumps(session)
             report['checks'].append('session JSON export includes samples and events, no face features')
+            page.locator('#manualAdd').click()
+            page.locator('#manualRa').fill('57.25');page.locator('#manualAdd').click()
+            page.wait_for_timeout(300)
+            with page.expect_download() as info:page.locator('#exportJson').click()
+            info.value.save_as(output/'session-with-manual-test.json')
+            recorded=json.loads((output/'session-with-manual-test.json').read_text())
+            manual=[s for s in recorded['samples'] if s['source']=='manual']
+            assert len(manual)==2 and manual[0]['segment']==manual[1]['segment'],'Manual points did not form one separate trace segment'
+            report['checks'].append('manual coordinates form their own continuous sky-trace segment')
             page.locator('#input').select_option('gaze');page.locator('#arm').click()
             assert not page.evaluate('window.ephemeris.getState().armed')
             report['checks'].append('uncalibrated gaze cannot arm')
@@ -89,6 +99,7 @@ def main():
                 assert any('/Norder' in x['url'] or 'Allsky' in x['url'] for x in report['network'] if x['status']==200),'No successful survey-tile response observed'
                 report['checks'].append('real astronomical survey tiles fetched')
             assert not report['errors'],report['errors']
+            page.locator('#controls').evaluate('(el)=>el.scrollTop=0');hover()
             report['passed']=True
         except Exception as error:
             report['passed']=False;report['failure']=str(error);raise

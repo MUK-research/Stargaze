@@ -11,6 +11,7 @@ let aladin=null,skyOverlay=null,ready=false,api=false,catalogue=[],seed=null;
 let cursor=null,mouse=null,gazePoint=null,smoothed=null,dragging=false,viewUntil=0;
 let width=1,height=1,lastFrame=0,lastSample=0,lastOverlay=0,segment=0,broken=true;
 let trailDirty=false,querySeq=0,queryController=null,autoTimer=null,lastReadout=0;
+let manualSegment=-1;
 const trace=[], fields={pleiades:[56.75,24.1167,8],orion:[83.8,-3,20],andromeda:[10.6847,41.2688,5],galactic:[266.4168,-29.0078,10]};
 const message=text=>$('message').textContent=text;
 const log=e=>{
@@ -127,7 +128,7 @@ function appendPoint(ra,dec,x,y,source,now,objectId=null){
   if(!Number.isFinite(ra)||!Number.isFinite(dec))return;
   broken=false;
   const point={t_ms:Math.round(now-t0),utc:new Date().toISOString(),observation_utc:observationTime()?.toISOString()||null,
-    ra,dec,x,y,source,segment,objectId};
+    ra,dec,x,y,source,segment:source==='manual'?manualSegment:segment,objectId};
   if(session.samples.length>=20000){session.samples.shift();session.truncated=true;}
   session.samples.push(point);trace.push(point);if(trace.length>2000)trace.shift();trailDirty=true;
 }
@@ -181,6 +182,8 @@ function draw(now){
         catch(error){panic(error.message);}
       }
     }
+    // A failed MIDI send can stop the cursor during this frame.
+    if(!cursor){requestAnimationFrame(draw);return;}
     const [ra,dec]=world(cursor.x,cursor.y);
     const previous=session.samples.at(-1);
     if(now-lastSample>=80&&(broken||!previous||Math.hypot(cursor.x-previous.x,cursor.y-previous.y)>1||now-lastSample>500)){
@@ -223,7 +226,7 @@ $('fixedTime').onchange=()=>{panic('Observation time changed');if(!observationTi
 $('go').onclick=()=>{if(!ready)return;panic('Field changed');const [ra,dec,fov]=fields[$('field').value];aladin.gotoRaDec(ra,dec);aladin.setFoV(fov);resetView();if(seed)acceptCatalogue({...seed,source:'bundled SIMBAD fields'});};
 $('survey').onchange=()=>{if(ready){panic('Survey changed');aladin.setImageSurvey($('survey').value);log({kind:'survey',survey:$('survey').value});}};
 $('catalog').onclick=loadCatalogue;
-$('clear').onclick=()=>{trace.length=0;trailDirty=true;breakTrace();log({kind:'trace_cleared'});message('Visible trace cleared. Earlier samples remain in the session export.');};
+$('clear').onclick=()=>{manualSegment--;trace.length=0;trailDirty=true;breakTrace();log({kind:'trace_cleared'});message('Visible trace cleared. Earlier samples remain in the session export.');};
 $('manualAdd').onclick=()=>{
   const ra=Number($('manualRa').value),dec=Number($('manualDec').value);
   if(!$('manualRa').value||!$('manualDec').value||!Number.isFinite(ra)||!Number.isFinite(dec)||ra<0||ra>360||Math.abs(dec)>90){message('RA must be 0–360°, Dec −90–90°.');return;}
