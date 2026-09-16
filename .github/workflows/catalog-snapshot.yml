@@ -17,21 +17,13 @@ jobs:
           python-version: '3.11'
       - name: Fetch public catalogue snapshot
         run: python tools/refresh_catalog.py .build/seed.json
-      - name: Check viewer dependencies and render original references
+      - name: Render original references
         if: always()
         run: |
-          python -m pip install pypdfium2
+          python -m pip install pypdfium2 pillow
           mkdir -p .build/reference
           python - <<'PY'
-          from pathlib import Path
-          from urllib.request import urlopen
           import pypdfium2 as pdfium
-          for url in ['https://aladin.cds.unistra.fr/AladinLite/api/v3/3.8.2/aladin.js', 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs', 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm/vision_wasm_internal.wasm', 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task']:
-              try:
-                  with urlopen(url, timeout=20) as r:
-                      print('RESOURCE', r.status, url, r.headers.get('Content-Type'))
-              except Exception as e:
-                  print('RESOURCE ERROR', url, str(e))
           doc = pdfium.PdfDocument('Reference/StargazeProjectProposal.pdf')
           for i, page in enumerate(doc):
               page.render(scale=1.5).to_pil().save(f'.build/reference/page-{i+1}.png')

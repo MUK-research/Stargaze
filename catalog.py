@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 ENDPOINT = "https://simbad.cds.unistra.fr/simbad/sim-tap/sync"
 MAX_BYTES = 4_000_000
@@ -44,19 +45,24 @@ def query_catalog(ra, dec, radius=5, limit=300, mag_limit=12):
     radius = number(radius, "radius", 0.01, 15)
     limit = int(number(limit, "limit", 1, 500))
     mag_limit = number(mag_limit, "mag_limit", -2, 20)
+    # Only validated numbers are interpolated. No caller-supplied ADQL or URLs.
     query = f"""SELECT TOP {limit} b.main_id, b.ra, b.dec, b.otype, b.sp_type,
-    f.V AS mag_v, f.B AS mag_b
+    f."V" AS mag_v, f."B" AS mag_b
     FROM basic AS b LEFT JOIN allfluxes AS f ON b.oid = f.oidref
     WHERE 1=CONTAINS(POINT('ICRS', b.ra, b.dec),
                     CIRCLE('ICRS', {ra:.8f}, {dec:.8f}, {radius:.8f}))
-      AND (f.V <= {mag_limit:.3f} OR f.V IS NULL)
-    ORDER BY f.V ASC"""
+      AND (f."V" <= {mag_limit:.3f} OR f."V" IS NULL)
+    ORDER BY f."V" ASC"""
     data = urlencode({"request": "doQuery", "lang": "adql", "format": "json", "query": query}).encode()
     request = Request(ENDPOINT, data=data, headers={
         "User-Agent": "Ephemeris-Stargaze/0.1 (interactive artistic sonification)",
         "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"})
-    with urlopen(request, timeout=20) as response:
-        raw = response.read(MAX_BYTES + 1)
+    try:
+        with urlopen(request, timeout=20) as response:
+            raw = response.read(MAX_BYTES + 1)
+    except HTTPError as exc:
+        detail = exc.read(2500).decode("utf-8", "replace")
+        raise ValueError(f"SIMBAD HTTP {exc.code}: {detail}") from exc
     if len(raw) > MAX_BYTES:
         raise ValueError("Catalogue response is too large")
     payload = json.loads(raw)
@@ -105,6 +111,7 @@ class CatalogService:
             self.cache[key] = (time.monotonic(), result)
             return result
         except Exception as exc:
+            # A network outage is not an empty sky. Clearly label the fallback.
             if cached:
                 return dict(cached[1], stale=True, warning=f"Live lookup unavailable ({type(exc).__name__}); cached data.")
             seed = json.loads(self.seed_path.read_text())
