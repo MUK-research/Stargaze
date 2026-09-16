@@ -52,7 +52,7 @@ def query_catalog(ra, dec, radius=5, limit=300, mag_limit=12):
     WHERE 1=CONTAINS(POINT('ICRS', b.ra, b.dec),
                     CIRCLE('ICRS', {ra:.8f}, {dec:.8f}, {radius:.8f}))
       AND (f."V" <= {mag_limit:.3f} OR f."V" IS NULL)
-    ORDER BY f."V" ASC"""
+    ORDER BY mag_v ASC"""
     data = urlencode({"request": "doQuery", "lang": "adql", "format": "json", "query": query}).encode()
     request = Request(ENDPOINT, data=data, headers={
         "User-Agent": "Ephemeris-Stargaze/0.1 (interactive artistic sonification)",
