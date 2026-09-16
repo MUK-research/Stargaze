@@ -6,6 +6,7 @@ on:
       - app.py
       - catalog.py
       - tools/browser_smoke.py
+      - tools/camera_smoke.py
       - .github/workflows/browser.yml
   workflow_dispatch:
 permissions:
@@ -13,7 +14,7 @@ permissions:
 jobs:
   browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,6 +32,9 @@ jobs:
       - name: Deterministic interface check
         if: always()
         run: python tools/browser_smoke.py --mock-sky --output build/mock-sky
+      - name: Real MediaPipe lifecycle with synthetic camera
+        if: always()
+        run: python tools/camera_smoke.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
