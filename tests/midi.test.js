@@ -1,0 +1,12 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {SoundEngine} from '../site/midi.js';
+const mapping={note:60,velocity:80,duration:700,color:{value:90}},config={channel:1,colorCC:74,sendCC:false};
+function engine(){const bytes=[],output={id:'test',name:'test',state:'connected',send:(data,time)=>bytes.push({data,time}),clear:()=>bytes.push({clear:true})};const s=new SoundEngine();s.preview=false;s.output=output;return {s,bytes,output};}
+test('no note before explicit arming',()=>{const {s,bytes}=engine();assert.equal(s.play(mapping,config,'star'),false);assert.equal(bytes.length,0);});
+test('note-on is paired with an independently scheduled note-off',async()=>{const {s,bytes}=engine();await s.arm();assert.equal(s.play(mapping,config,'star'),true);assert.deepEqual(bytes[0].data,[0x90,60,80]);assert.deepEqual(bytes[1].data,[0x80,60,0]);assert.ok(bytes[1].time>performance.now()+500);s.panic();});
+test('rate limit prevents repeated frame-rate attacks',async()=>{const {s}=engine();await s.arm();assert.equal(s.play(mapping,config,'a'),true);assert.equal(s.play(mapping,config,'b'),false);s.panic();});
+test('release clears queued note-off before same-pitch re-use',async()=>{const {s,bytes}=engine();await s.arm();s.play(mapping,config,'a');s.release();assert.ok(bytes.some(b=>b.clear));assert.deepEqual(bytes.at(-1).data,[0x80,60,0]);assert.equal(s.active,null);});
+test('panic is channel-local, sends sustain-off and disarms',async()=>{const {s,bytes}=engine();await s.arm();s.play(mapping,{...config,channel:3},'a');s.panic();assert.equal(s.armed,false);assert.deepEqual(bytes.slice(-3).map(b=>b.data),[[0xB2,64,0],[0xB2,120,0],[0xB2,123,0]]);});
+test('CC is opt-in and sent only to separately selected destination',async()=>{const {s,bytes}=engine();const cc=[];s.ccOutput={send:data=>cc.push(data)};await s.arm();s.play(mapping,config,'a');assert.equal(cc.length,0);s.lastOn=-Infinity;s.play(mapping,{...config,sendCC:true},'b');assert.deepEqual(cc,[[0xB0,74,90]]);assert.equal(bytes.filter(b=>b.data?.[0]===0xB0).length,0);s.panic();});
+test('unknown colour does not produce invented CC',async()=>{const {s}=engine();const cc=[];s.ccOutput={send:d=>cc.push(d)};await s.arm();s.play({...mapping,color:{value:null}},{...config,sendCC:true},'a');assert.equal(cc.length,0);s.panic();});
+test('non-finite MIDI payload rejected',()=>{const {s}=engine();assert.throws(()=>s.play({...mapping,note:NaN},config,'a'),/Invalid MIDI/);});
