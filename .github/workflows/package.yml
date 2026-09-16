@@ -1,0 +1,50 @@
+name: Prototype package
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/package.yml
+      - artifacts/**
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Package tracked project files only
+        run: |
+          mkdir -p build/package
+          git archive --format=zip --prefix=Ephemeris/ --output="build/package/Ephemeris-${GITHUB_SHA:0:7}.zip" HEAD
+      - name: Record pinned runtime metadata
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          from urllib.request import urlopen
+          from pathlib import Path
+          import hashlib, re
+          urls = [
+            'https://aladin.cds.unistra.fr/AladinLite/api/v3/3.8.2/aladin.js',
+            'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs',
+            'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm/vision_wasm_internal.js']
+          lines=[]
+          for url in urls:
+              try:
+                  with urlopen(url,timeout=20) as r:
+                      body=r.read(10000000)
+                      lines.append(f'URL {url}\nHTTP {r.status}\nSHA256 {hashlib.sha256(body).hexdigest()}')
+                  text=body.decode('utf-8')
+                  for needle in ['ModuleFactory not set','define.amd','self.ModuleFactory','window.define']:
+                      for m in list(re.finditer(re.escape(needle),text))[:4]:
+                          lines.append(f'{needle}: '+text[max(0,m.start()-250):m.end()+250])
+                  if 'vision_wasm_internal.js' in url:lines.append('TAIL: '+text[-1500:])
+              except Exception as e:lines.append(f'{url}: {type(e).__name__}: {e}')
+          Path('build/package/runtime-audit.txt').write_text('\n\n'.join(lines))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prototype-package
+          path: build/package/
