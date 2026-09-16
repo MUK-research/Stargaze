@@ -16,20 +16,8 @@ jobs:
         with:
           python-version: '3.11'
       - name: Fetch public catalogue snapshot
-        run: python tools/refresh_catalog.py .build/seed.json
-      - name: Render original references
-        if: always()
-        run: |
-          python -m pip install pypdfium2 pillow
-          mkdir -p .build/reference
-          python - <<'PY'
-          import pypdfium2 as pdfium
-          doc = pdfium.PdfDocument('Reference/StargazeProjectProposal.pdf')
-          for i, page in enumerate(doc):
-              page.render(scale=1.5).to_pil().save(f'.build/reference/page-{i+1}.png')
-          PY
+        run: python tools/refresh_catalog.py build/seed.json
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: catalogue-and-reference-preview
-          path: .build/
+          name: catalogue-snapshot
+          path: build/seed.json

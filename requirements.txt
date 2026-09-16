@@ -1,1 +1,2 @@
-flask
+# Python 3.10+ standard library only. No pip dependencies for the prototype.
+# The original Flask version and its requirements are preserved in legacy/v0.0/.

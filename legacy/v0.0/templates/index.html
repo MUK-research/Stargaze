@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Sky Trajectory Sketcher</title>
+
+  <link rel="stylesheet"
+        href="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.min.css">
+
+  <script src="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js"></script>
+
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: white; }
+    #panel {
+      position: absolute; z-index: 10; top: 1rem; left: 1rem;
+      background: rgba(0,0,0,.75); padding: 1rem; border-radius: .75rem;
+      width: 320px;
+    }
+    input { width: 90px; }
+    button { margin-top: .4rem; }
+    #aladin-lite-div { width: 100vw; height: 100vh; }
+    pre { white-space: pre-wrap; max-height: 180px; overflow: auto; }
+  </style>
+</head>
+
+<body>
+  <div id="panel">
+    <strong>Trajectory overlay</strong><br><br>
+
+    RA <input id="ra" type="number" step="0.0001" value="83.8221">
+    Dec <input id="dec" type="number" step="0.0001" value="-5.3911">
+    <button onclick="addTypedPoint()">Add point</button>
+    <button onclick="clearTrajectory()">Clear</button>
+
+    <p>Click the sky to add a point.</p>
+    <div id="current">Coordinates: —</div>
+
+    <h4>Points</h4>
+    <pre id="points"></pre>
+  </div>
+
+  <div id="aladin-lite-div"></div>
+
+  <script>
+    let aladin;
+    let overlay;
+    let points = [];
+
+    A.init.then(() => {
+      aladin = A.aladin("#aladin-lite-div", {
+        survey: "P/DSS2/color",
+        target: "M42",
+        fov: 2,
+        cooFrame: "ICRS"
+      });
+
+      overlay = A.graphicOverlay({
+        color: "cyan",
+        lineWidth: 3
+      });
+
+      aladin.addOverlay(overlay);
+
+      aladin.on("positionChanged", () => {
+        const [ra, dec] = aladin.getRaDec();
+        document.getElementById("current").innerText =
+          `Center: RA ${ra.toFixed(5)}, Dec ${dec.toFixed(5)}`;
+      });
+
+      aladin.on("click", async function(object, x, y) {
+        const [ra, dec] = aladin.pix2world(x, y);
+        await addPoint(ra, dec);
+      });
+
+      loadTrajectory();
+    });
+
+    async function loadTrajectory() {
+      const res = await fetch("/api/trajectory");
+      points = await res.json();
+      redraw();
+    }
+
+    async function addTypedPoint() {
+      const ra = parseFloat(document.getElementById("ra").value);
+      const dec = parseFloat(document.getElementById("dec").value);
+      await addPoint(ra, dec);
+    }
+
+    async function addPoint(ra, dec) {
+      const res = await fetch("/api/trajectory", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ra, dec})
+      });
+      points = await res.json();
+      redraw();
+    }
+
+    async function clearTrajectory() {
+      const res = await fetch("/api/trajectory", {method: "DELETE"});
+      points = await res.json();
+      redraw();
+    }
+
+    function redraw() {
+      overlay.removeAll();
+
+      const coords = points.map(p => [p.ra, p.dec]);
+
+      if (coords.length >= 2) {
+        overlay.add(A.polyline(coords));
+      }
+
+      for (const p of points) {
+        overlay.add(A.circle(p.ra, p.dec, 0.01));
+      }
+
+      document.getElementById("points").innerText =
+        points.map((p, i) =>
+          `${i + 1}: RA ${p.ra.toFixed(6)}, Dec ${p.dec.toFixed(6)}`
+        ).join("\n");
+    }
+  </script>
+</body>
+</html>
