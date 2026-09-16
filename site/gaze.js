@@ -2,47 +2,83 @@
  * Frames never leave the browser. No identity recognition or attention inference.
  */
 import {eyeFeatures,fitCalibration,predictGaze,validateCalibration} from './core.js';
-const CDN='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21';
-const MODEL='https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 const TRAIN=[[.12,.15],[.5,.15],[.88,.15],[.88,.5],[.5,.5],[.12,.5],[.12,.85],[.5,.85],[.88,.85]];
 const VALIDATE=[[.27,.28],[.73,.28],[.73,.72],[.27,.72],[.5,.4]];
 
 export class GazeTracker {
   constructor(video,onSample,onStatus) {
     this.video=video; this.onSample=onSample; this.onStatus=onStatus;
-    this.stream=null; this.model=null; this.landmarker=null; this.running=false;
+    this.stream=null; this.model=null; this.worker=null; this.running=false;
+    this.loading=false; this.pendingFrame=false; this.rejectStart=null;
     this.lastVideo=-1; this.lastFrame=0; this.latest=null; this.validation=null;
     this.calibration=null; this.raf=0; this.generation=0;
+    this.processedFrames=0; this.validFrames=0; this.faceCount=0;
+    this.lastStatus=0; this.delegate=null;
   }
   async start() {
-    const generation=++this.generation;
+    if(this.running || this.loading) return;
     if(!window.isSecureContext || !navigator.mediaDevices?.getUserMedia)
       throw new Error('Camera needs localhost or HTTPS. Open the Python server in Chrome/Edge.');
-    this.onStatus('Loading MediaPipe. Camera stays local; external code/model downloads are required.');
+    if(typeof Worker==='undefined' || typeof createImageBitmap==='undefined')
+      throw new Error('This browser cannot run the local camera worker. Use desktop Chrome/Edge.');
+    const generation=++this.generation;
+    this.loading=true;
+    this.onStatus('Loading MediaPipe in a local worker. No webcam frames are uploaded.');
     try {
-      const {FaceLandmarker,FilesetResolver}=await import(`${CDN}/vision_bundle.mjs`);
+      // Do not set type: "module": the pinned WASM loader needs importScripts.
+      const worker=new Worker(new URL('./vision-worker.js',import.meta.url));
+      this.worker=worker;
+      await new Promise((resolve,reject)=>{
+        let ready=false;
+        const timer=setTimeout(()=>fail(new Error('MediaPipe download timed out. Check your internet connection and try again.')),60000);
+        const fail=error=>{
+          clearTimeout(timer);
+          if(!ready) reject(error);
+          else if(generation===this.generation) this.stop(`Tracking stopped: ${error.message}`);
+        };
+        this.rejectStart=error=>{clearTimeout(timer);reject(error);};
+        worker.onerror=event=>{event.preventDefault();fail(new Error(event.message||'Camera worker failed to load.'));};
+        worker.onmessage=({data})=>{
+          if(generation!==this.generation) return;
+          if(data.type==='ready') {
+            ready=true;clearTimeout(timer);this.rejectStart=null;
+            this.delegate=data.delegate;resolve();
+          } else if(data.type==='error') fail(new Error(data.message));
+          else if(data.type==='result') {
+            this.pendingFrame=false;this.processedFrames++;
+            try {this.consume(data);} catch(error) {fail(error);}
+          }
+        };
+        worker.postMessage({type:'init'});
+      });
       if(generation!==this.generation) return;
-      const files=await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
-      const options={baseOptions:{modelAssetPath:MODEL,delegate:'GPU'},runningMode:'VIDEO',
-        numFaces:2,outputFaceBlendshapes:true,minFaceDetectionConfidence:.6,
-        minFacePresenceConfidence:.6,minTrackingConfidence:.6};
-      try {this.landmarker=await FaceLandmarker.createFromOptions(files,options);}
-      catch {options.baseOptions.delegate='CPU'; this.landmarker=await FaceLandmarker.createFromOptions(files,options);}
-      if(generation!==this.generation) {this.landmarker.close();this.landmarker=null;return;}
-      const stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:'user'},audio:false});
-      if(generation!==this.generation) {stream.getTracks().forEach(t=>t.stop());this.landmarker?.close();return;}
+      const stream=await navigator.mediaDevices.getUserMedia({
+        video:{width:640,height:480,facingMode:'user'},audio:false});
+      if(generation!==this.generation) {stream.getTracks().forEach(t=>t.stop());return;}
       this.stream=stream; this.video.srcObject=stream; await this.video.play();
-      this.running=true; this.lastVideo=-1;
-      this.onStatus('Camera ready. Run calibration before using gaze.');
+      if(generation!==this.generation) return;
+      this.running=true; this.loading=false; this.lastVideo=-1;this.lastFrame=0;
+      this.processedFrames=0;this.validFrames=0;this.faceCount=0;
+      for(const track of stream.getVideoTracks()) {
+        track.onended=()=>{if(generation===this.generation)this.stop('Camera disconnected. Start it again to recalibrate.');};
+      }
+      this.onStatus(`Camera ready (${this.delegate} worker). Run calibration before using gaze.`);
       this.loop();
-    } catch(error) {this.stop();throw error;}
+    } catch(error) {
+      // A cancelled, old startup must not stop a newer camera instance.
+      if(generation!==this.generation) return;
+      this.stop(`Camera unavailable: ${error.message}`);throw error;
+    }
   }
-  stop() {
-    ++this.generation; this.running=false; cancelAnimationFrame(this.raf);
+  stop(reason='Camera off.') {
+    ++this.generation; this.running=false; this.loading=false;
+    cancelAnimationFrame(this.raf);
+    this.rejectStart?.(new Error('Camera startup cancelled.'));this.rejectStart=null;
+    this.worker?.terminate();this.worker=null;this.pendingFrame=false;
     this.stream?.getTracks().forEach(t=>t.stop()); this.stream=null;
-    this.video.srcObject=null; this.landmarker?.close();this.landmarker=null;
+    this.video.srcObject=null;
     this.latest=null;this.model=null;this.validation=null;this.calibration=null;
-    this.onSample(null);this.onStatus('Camera off.');
+    this.onSample(null);this.onStatus(reason);
   }
   invalidate() {this.model=null;this.validation=null;this.calibration=null;this.onSample(null);}
   beginCalibration(width,height,onTarget,onDone) {
@@ -88,22 +124,43 @@ export class GazeTracker {
     if(!result.passed)this.model=null;
     c.onDone(result);
   }
-  loop() {
-    if(!this.running)return;
+  consume(result) {
+    if(!this.running) return;
     const now=performance.now();
-    if(now-this.lastFrame>=45 && this.video.readyState>=2 && this.video.currentTime!==this.lastVideo) {
-      this.lastFrame=now;this.lastVideo=this.video.currentTime;
-      try {
-        const result=this.landmarker.detectForVideo(this.video,now);
-        const features=result.faceLandmarks.length===1?
-          eyeFeatures(result.faceLandmarks[0],result.faceBlendshapes?.[0]?.categories||[]):null;
-        this.latest=features?{features,time:now}:null;
-        this.collect(features,now);
-        if(features && this.model && !this.calibration && this.validation?.passed) {
-          const point=predictGaze(this.model,features);
-          this.onSample(point.every(Number.isFinite)?{x:point[0],y:point[1],time:now}:null);
-        } else this.onSample(null);
-      } catch(error) {this.onStatus(`Tracking stopped: ${error.message}`);this.stop();return;}
+    // Keep the original capture timestamp: delayed inference is not fresh gaze.
+    const fresh=now-result.time<=200;
+    this.faceCount=result.faceLandmarks.length;
+    const features=fresh && result.faceLandmarks.length===1?
+      eyeFeatures(result.faceLandmarks[0],result.faceBlendshapes?.[0]?.categories||[]):null;
+    this.latest=features?{features,time:result.time}:null;
+    if(features)this.validFrames++;
+    if(now-this.lastStatus>1000 && !this.calibration) {
+      this.lastStatus=now;
+      const status=!fresh?'Frames too slow; reduce camera/browser load.':
+        this.faceCount>1?'Multiple faces detected; cursor paused.':
+        !this.faceCount?'No face detected; cursor paused.':
+        !features?'Eyes not clear or closed; cursor paused.':
+        this.validation?.passed?'Calibrated gaze tracking.':'Face and eyes detected. Run calibration.';
+      this.onStatus(status);
+    }
+    this.collect(features,now);
+    if(features && this.model && !this.calibration && this.validation?.passed) {
+      const point=predictGaze(this.model,features);
+      this.onSample(point.every(Number.isFinite)?{x:point[0],y:point[1],time:result.time}:null);
+    } else this.onSample(null);
+  }
+  loop() {
+    if(!this.running) return;
+    const now=performance.now(),generation=this.generation;
+    if(!this.pendingFrame && now-this.lastFrame>=45 && this.video.readyState>=2 && this.video.currentTime!==this.lastVideo) {
+      this.lastFrame=now;this.lastVideo=this.video.currentTime;this.pendingFrame=true;
+      createImageBitmap(this.video).then(bitmap=>{
+        if(generation!==this.generation || !this.running || !this.worker) {bitmap.close();return;}
+        try {this.worker.postMessage({type:'frame',bitmap,time:now},[bitmap]);}
+        catch(error) {bitmap.close();throw error;}
+      }).catch(error=>{
+        if(generation===this.generation)this.stop(`Camera frame failed: ${error.message}`);
+      });
     }
     this.raf=requestAnimationFrame(()=>this.loop());
   }

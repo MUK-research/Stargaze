@@ -11,22 +11,24 @@ def main():
     output=Path('build/camera');output.mkdir(parents=True,exist_ok=True)
     report={'camera_source':'Chromium synthetic test pattern, not a person',
             'landmarker':'real MediaPipe Tasks Vision 0.10.21 / Face Landmarker model v1',
-            'participant_gaze_accuracy':'not tested','checks':[],'errors':[]}
+            'participant_gaze_accuracy':'not tested','checks':[],'errors':[],'console':[]}
     with sync_playwright() as p:
         browser=p.chromium.launch(headless=True,args=['--no-sandbox','--enable-unsafe-swiftshader',
             '--ignore-gpu-blocklist','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream'])
         context=browser.new_context(viewport={'width':1440,'height':1000},permissions=['camera'])
         page=context.new_page()
         page.on('pageerror',lambda e:report['errors'].append(str(e)))
+        page.on('console',lambda m:report['console'].append(m.text) if m.type=='error' and len(report['console'])<12 else None)
         try:
             page.goto('http://127.0.0.1:8765',wait_until='domcontentloaded')
             page.wait_for_function('window.ephemeris?.getState().ready',timeout=60000)
             page.locator('#camera').click()
             page.wait_for_function("document.getElementById('video').srcObject?.active && document.getElementById('camera').textContent==='Stop camera'",timeout=60000)
-            page.wait_for_timeout(1500)
+            page.wait_for_function('window.ephemeris.getState().gaze.frames >= 3',timeout=45000)
             assert page.locator('#video').evaluate('(v)=>Boolean(v.srcObject?.active)'),'Camera pipeline stopped unexpectedly'
             assert not page.locator('#calibrate').is_disabled()
-            report['checks'].append('real MediaPipe runtime/model loaded and processed synthetic video')
+            report['worker_state']=page.evaluate('window.ephemeris.getState().gaze')
+            report['checks'].append('real MediaPipe runtime/model loaded in classic worker and processed at least three synthetic video frames')
             page.locator('#calibrate').click()
             assert page.locator('#calibration').is_visible()
             page.keyboard.press('Space');page.wait_for_timeout(500)
@@ -38,6 +40,11 @@ def main():
             assert page.locator('#video').evaluate('(v)=>v.srcObject===null')
             assert page.locator('#calibrate').is_disabled()
             report['checks'].append('stop camera releases the video stream and disables calibration')
+            page.locator('#camera').click()
+            page.wait_for_function('window.ephemeris.getState().gaze.running && window.ephemeris.getState().gaze.frames >= 2',timeout=60000)
+            page.locator('#camera').click()
+            assert page.locator('#video').evaluate('(v)=>v.srcObject===null')
+            report['checks'].append('camera restarts after full worker/stream teardown')
             assert not report['errors'],report['errors']
             report['passed']=True
         except Exception as error:

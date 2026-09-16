@@ -22,7 +22,15 @@ const sound=new SoundEngine(log);
 const gaze=new GazeTracker($('video'),point=>{
   gazePoint=point;
   if(!point){smoothed=null;if($('input').value==='gaze')breakInput('tracking unavailable');}
-},text=>{$('gazeStatus').textContent=text;});
+},text=>{
+  $('gazeStatus').textContent=text;
+  if(!gaze.loading) {
+    $('camera').textContent=gaze.running?'Stop camera':'Start camera';
+    $('camera').disabled=false;$('calibrate').disabled=!gaze.running;
+    $('video').hidden=!gaze.running;
+    if(!gaze.running)$('calibration').hidden=true;
+  }
+});
 
 function breakTrace(){if(!broken){segment++;broken=true;}cursor=null;}
 function breakInput(reason){
@@ -296,6 +304,8 @@ async function init(){
   ready=true;$('loading').hidden=true;resize();updateTransport();requestAnimationFrame(draw);
   message('Mouse mode · real survey imagery · arm sound when ready');
   window.ephemeris={getState:()=>({ready,api,armed:sound.armed,catalogueCount:catalogue.length,
+    gaze:{running:gaze.running,loading:gaze.loading,frames:gaze.processedFrames,
+      validFrames:gaze.validFrames,faceCount:gaze.faceCount,delegate:gaze.delegate},
     current:gate.current?.star.id||null,sampleCount:session.samples.length,events:session.events.slice(-100),
     projected:catalogue.map(star=>({id:star.id,xy:pixel(star.ra,star.dec)})).filter(p=>p.xy)})};
 }
