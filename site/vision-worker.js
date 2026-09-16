@@ -12,8 +12,7 @@ self.onmessage = async ({data}) => {
     if (loading || landmarker) return;
     loading = true;
     try {
-      importScripts(`${CDN}/vision_bundle.js`);
-      const {FaceLandmarker, FilesetResolver} = self.vision;
+      const {FaceLandmarker, FilesetResolver} = await import(`${CDN}/vision_bundle.mjs`);
       const files = await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
       const options = {
         baseOptions: {modelAssetPath: MODEL, delegate: 'GPU'},
@@ -21,14 +20,20 @@ self.onmessage = async ({data}) => {
         minFaceDetectionConfidence: .6, minFacePresenceConfidence: .6,
         minTrackingConfidence: .6
       };
+      // Emscripten's classic script must publish ModuleFactory on this worker.
+      // Preload before EACH attempt; MediaPipe clears its globals after creation.
+      const create = async () => {
+        importScripts(files.wasmLoaderPath);
+        return FaceLandmarker.createFromOptions(files, options);
+      };
       let delegate = 'GPU';
       try {
-        landmarker = await FaceLandmarker.createFromOptions(files, options);
+        landmarker = await create();
       } catch (gpuError) {
         delegate = 'CPU';
         options.baseOptions.delegate = delegate;
         try {
-          landmarker = await FaceLandmarker.createFromOptions(files, options);
+          landmarker = await create();
         } catch (cpuError) {
           throw new Error(`MediaPipe startup failed. GPU: ${gpuError.message}; CPU: ${cpuError.message}`);
         }

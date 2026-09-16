@@ -19,12 +19,15 @@ def main():
         page=context.new_page()
         page.on('pageerror',lambda e:report['errors'].append(str(e)))
         page.on('console',lambda m:report['console'].append(m.text) if m.type=='error' and len(report['console'])<12 else None)
+        def start_camera():
+            page.locator('#camera').click()
+            page.wait_for_function('!window.ephemeris.getState().gaze.loading',timeout=65000)
+            assert page.evaluate('window.ephemeris.getState().gaze.running'),page.locator('#gazeStatus').text_content()
+            page.wait_for_function('window.ephemeris.getState().gaze.frames >= 3',timeout=45000)
         try:
             page.goto('http://127.0.0.1:8765',wait_until='domcontentloaded')
             page.wait_for_function('window.ephemeris?.getState().ready',timeout=60000)
-            page.locator('#camera').click()
-            page.wait_for_function("document.getElementById('video').srcObject?.active && document.getElementById('camera').textContent==='Stop camera'",timeout=60000)
-            page.wait_for_function('window.ephemeris.getState().gaze.frames >= 3',timeout=45000)
+            start_camera()
             assert page.locator('#video').evaluate('(v)=>Boolean(v.srcObject?.active)'),'Camera pipeline stopped unexpectedly'
             assert not page.locator('#calibrate').is_disabled()
             report['worker_state']=page.evaluate('window.ephemeris.getState().gaze')
@@ -40,8 +43,7 @@ def main():
             assert page.locator('#video').evaluate('(v)=>v.srcObject===null')
             assert page.locator('#calibrate').is_disabled()
             report['checks'].append('stop camera releases the video stream and disables calibration')
-            page.locator('#camera').click()
-            page.wait_for_function('window.ephemeris.getState().gaze.running && window.ephemeris.getState().gaze.frames >= 2',timeout=60000)
+            start_camera()
             page.locator('#camera').click()
             assert page.locator('#video').evaluate('(v)=>v.srcObject===null')
             report['checks'].append('camera restarts after full worker/stream teardown')
