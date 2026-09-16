@@ -1,0 +1,38 @@
+name: Browser integration
+on:
+  push:
+    paths:
+      - site/**
+      - app.py
+      - catalog.py
+      - tools/browser_smoke.py
+      - .github/workflows/browser.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Start local application
+        run: |
+          python app.py > /tmp/ephemeris-server.log 2>&1 &
+          for n in $(seq 1 20); do curl -fsS http://127.0.0.1:8765/api/health && break; sleep 1; done
+      - name: Real sky browser check with mock MIDI hardware
+        run: python tools/browser_smoke.py --output build/real-sky
+      - name: Deterministic interface check
+        if: always()
+        run: python tools/browser_smoke.py --mock-sky --output build/mock-sky
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-integration
+          path: build/

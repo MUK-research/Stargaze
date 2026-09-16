@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Ephemeris / Stargaze — an experimental gaze-to-sky-to-piano instrument.">
+<title>Ephemeris / Stargaze</title>
+<link rel="stylesheet" href="style.css">
+<script defer src="https://aladin.cds.unistra.fr/AladinLite/api/v3/3.8.2/aladin.js"></script>
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="orbit">◌</span><div><h1>EPHEMERIS <span>/ Stargaze</span></h1><p>Look into the sky. Let a melody emerge.</p></div></div>
+  <div class="transport"><span id="armedState" class="badge">SILENT</span><button id="arm" class="primary">Arm sound</button><button id="panic" class="danger">Stop / Esc</button><button id="fullscreen" title="Fullscreen; recalibrate afterwards">⛶</button></div>
+</header>
+<main>
+<aside id="controls">
+  <section><h2>01 / Sky</h2>
+    <div class="row"><select id="field" aria-label="Sky field"><option value="pleiades">Pleiades</option><option value="orion">Orion</option><option value="andromeda">Andromeda</option><option value="galactic">Galactic centre</option></select><button id="go">Go</button></div>
+    <label>Survey <select id="survey"><option value="P/DSS2/color">DSS2 · optical colour</option><option value="P/2MASS/color">2MASS · near-infrared composite</option></select></label>
+    <div class="row"><button id="catalog">Load objects in view</button><label class="check"><input id="autoCatalog" type="checkbox"> Auto</label></div>
+    <p id="catalogStatus" class="small" role="status">Loading bundled catalogue…</p>
+    <p class="small muted">Real survey images, not a live sky camera. Catalogue circles are playable regions, not object sizes.</p>
+  </section>
+  <section><h2>02 / Cursor</h2>
+    <label>Input <select id="input"><option value="mouse">Mouse / trackpad</option><option value="gaze">Calibrated webcam gaze</option></select></label>
+    <div class="row"><button id="camera">Start camera</button><button id="calibrate" disabled>Calibrate</button></div>
+    <video id="video" muted playsinline autoplay hidden></video>
+    <p id="gazeStatus" class="small" role="status">Mouse mode is ready. Webcam is off.</p>
+    <label>Region radius <span id="radiusValue">85 px</span><input id="radius" type="range" min="15" max="250" value="85"></label>
+    <label>Dwell before note <span id="dwellValue">220 ms</span><input id="dwell" type="range" min="100" max="1000" step="10" value="220"></label>
+    <div class="row"><label class="check"><input id="trail" type="checkbox" checked>Trace</label><label class="check"><input id="labels" type="checkbox" checked>Objects</label><button id="clear">Clear trace</button></div>
+  </section>
+  <section><h2>03 / Sound</h2>
+    <button id="midi">Connect MIDI</button>
+    <label>Piano output <select id="output"><option value="">No hardware output</option></select></label>
+    <label class="check"><input id="preview" type="checkbox" checked>Browser sound preview</label>
+    <p id="midiStatus" class="small" role="status">Sound is off until armed. No sustain messages are generated.</p>
+    <details><summary>Musical mapping</summary>
+      <div class="pair"><label>Lowest note<input id="minNote" type="number" min="21" max="96" value="48"></label><label>Highest note<input id="maxNote" type="number" min="33" max="108" value="84"></label></div>
+      <div class="pair"><label>Soft velocity<input id="minVelocity" type="number" min="1" max="99" value="25"></label><label>Loud velocity<input id="maxVelocity" type="number" min="2" max="100" value="88"></label></div>
+      <div class="pair"><label>Note length (ms)<input id="duration" type="number" min="100" max="1200" value="700"></label><label>MIDI channel<input id="channel" type="number" min="1" max="16" value="1"></label></div>
+      <label>Root offset (semitones)<input id="root" type="number" min="0" max="11" value="0"></label>
+      <p class="small">Azimuth → circle-of-fifths root. Elevation → mode. Brighter V magnitude → higher, scale-quantised pitch. Cursor proximity → attack velocity.</p>
+      <label class="check"><input id="sendCC" type="checkbox">Send spectral-colour CC</label>
+      <label>Colour output <select id="ccOutput"><option value="">No CC destination</option></select></label>
+      <label>Colour controller<input id="colorCC" type="number" min="0" max="119" value="74"></label>
+      <p class="small">Colour CC is for a synth or electronics layer. It does not change an acoustic piano's timbre. Unknown colour sends no CC.</p>
+    </details>
+  </section>
+  <details class="section"><summary>Observer &amp; time</summary>
+    <p class="small">Editable city-level default: Vienna. This sets physical sky elevation/azimuth, not screen x/y.</p>
+    <div class="pair"><label>Latitude (° N)<input id="latitude" type="number" min="-90" max="90" step=".0001" value="48.2082"></label><label>Longitude (° E)<input id="longitude" type="number" min="-180" max="180" step=".0001" value="16.3738"></label></div>
+    <label class="check"><input id="now" type="checkbox" checked>Use current time</label>
+    <label>Fixed UTC date/time<input id="fixedTime" type="datetime-local" step="1" disabled></label>
+    <label class="check"><input id="horizonOnly" type="checkbox">Only play objects above horizon</label>
+    <p class="small">Approximate geometric Alt/Az; no refraction or proper-motion correction. Below-horizon objects remain visible in this atlas.</p>
+  </details>
+  <details class="section"><summary>Coordinates &amp; export</summary>
+    <div class="pair"><label>RA (degrees)<input id="manualRa" type="number" min="0" max="360" step=".000001" value="56.75"></label><label>Dec (degrees)<input id="manualDec" type="number" min="-90" max="90" step=".000001" value="24.1167"></label></div>
+    <button id="manualAdd">Add sky-trace point</button>
+    <div class="row"><button id="exportJson">Export session JSON</button><button id="exportCsv">Trace CSV</button></div>
+    <p class="small">Exports contain cursor coordinates, timestamps, object/musical events and settings, not webcam frames. Keep participant recordings private.</p>
+  </details>
+  <footer>Concept &amp; development: <a href="https://www.artacho.at/" target="_blank" rel="noopener">Adrián Artacho</a><br>Aladin Lite / CDS · SIMBAD · MediaPipe<br><a href="https://trello.com/c/s5q6ejqY/94-stargaze-ephemeris" target="_blank" rel="noopener">📝 To-Do</a> · Prototype 0.1</footer>
+</aside>
+<div id="stage">
+  <div id="aladin"></div><canvas id="overlay" aria-hidden="true"></canvas>
+  <div id="loading" class="skyMessage"><h2>Opening the sky…</h2><p>Loading Aladin Lite and real survey imagery.</p></div>
+  <div id="calibration" hidden><div id="calibrationDot"></div><div class="calibrationInstructions"><strong id="calibrationTitle"></strong><p id="calibrationText"></p><button id="cancelCalibration">Cancel</button></div></div>
+  <div id="skyReadout"><span id="cursorCoordinates">Move the cursor over the sky.</span><span id="clock"></span></div>
+  <div id="objectPanel"><span class="eyebrow">CURRENT REGION</span><h2 id="objectName">Explore a star field</h2><p id="objectInfo">Pan and zoom to explore. Hover near a marked object, then arm sound.</p><a id="objectLink" hidden target="_blank" rel="noopener">Open in SIMBAD ↗</a></div>
+  <div id="message" role="status">Mouse mode · sound off</div>
+</div>
+</main>
+</body></html>
