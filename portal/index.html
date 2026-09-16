@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Stargaze · interactive sketch</title>
+<style>
+:root{color-scheme:dark;font:12px Arial,sans-serif}*{box-sizing:border-box}body{margin:0;background:#070b14;color:#e4edf9;padding:16px}header,footer{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}header{font:9px monospace;letter-spacing:1px;color:#92a6bf}canvas{display:block;width:100%;height:190px;margin:4px 0 10px}button{font:11px Arial,sans-serif;color:#eaf7f4;border:1px solid #35475e;background:transparent;padding:7px 10px;border-radius:4px;cursor:pointer}button:focus-visible{outline:2px solid #72e0d1;outline-offset:3px}footer{font-size:10px;color:#9aa9bf}strong{color:#72e0d1;font-weight:500}</style></head>
+<body><header><span>STARGAZE / ATTENTIONAL TRAJECTORY</span><span>SILENT SKETCH</span></header><canvas aria-label="Abstract gaze path through a star field" role="img"></canvas><footer><span><strong>Move the gaze</strong> — stars become musical regions.</span><button type="button">New sky ↻</button></footer>
+<script>
+const q=new URLSearchParams(location.search),token=q.get('prlToken'),canvas=document.querySelector('canvas'),g=canvas.getContext('2d');
+let w=300,phase=.4,raf=0,last=0,seed=7,active=q.get('motion')!=='off'&&!matchMedia('(prefers-reduced-motion: reduce)').matches;
+function rnd(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;}
+function draw(){if(!g)return;g.clearRect(0,0,w,190);seed=11;for(let i=0;i<42;i++){const x=rnd()*w,y=12+rnd()*150,r=1+rnd()*2.8;g.fillStyle=i%9===0?'#ff8290':'#dce8ff';g.globalAlpha=.35+rnd()*.55;g.beginPath();g.arc(x,y,r,0,Math.PI*2);g.fill();}g.globalAlpha=1;g.strokeStyle='#72e0d1';g.lineWidth=2.2;g.beginPath();for(let i=0;i<90;i++){const t=i/89,x=12+t*(w-24),y=94+Math.sin(t*6.2+phase)*45+Math.sin(t*18+phase*.7)*8;i?g.lineTo(x,y):g.moveTo(x,y);}g.stroke();for(let i=0;i<5;i++){const t=.12+i*.19,x=12+t*(w-24),y=94+Math.sin(t*6.2+phase)*45+Math.sin(t*18+phase*.7)*8;g.fillStyle='#ff8290';g.beginPath();g.arc(x,y,4,0,Math.PI*2);g.fill();}}
+function frame(t){raf=0;if(!active||document.hidden)return;if(t-last>40){phase+=.025;last=t;draw();}raf=requestAnimationFrame(frame);}
+function sync(){cancelAnimationFrame(raf);raf=0;draw();if(active&&!document.hidden)raf=requestAnimationFrame(frame);}
+new ResizeObserver(()=>{w=canvas.clientWidth;const d=Math.min(devicePixelRatio||1,1.5);canvas.width=Math.round(w*d);canvas.height=Math.round(190*d);if(g)g.setTransform(d,0,0,d,0,0);draw();parent.postMessage({type:'prl:resize',token,height:document.body.scrollHeight},'*');}).observe(canvas);
+document.querySelector('button').addEventListener('click',()=>{phase+=1.25;seed=Math.floor(Math.random()*100000)+1;draw();});
+window.addEventListener('message',e=>{if(e.source===parent&&e.data?.token===token&&e.data.type==='prl:visibility'){active=Boolean(e.data.active);sync();}});document.addEventListener('visibilitychange',sync);window.addEventListener('pagehide',()=>cancelAnimationFrame(raf));sync();parent.postMessage({type:'prl:ready',token},'*');
+</script></body></html>

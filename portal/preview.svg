@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">Stargaze project preview</title>
+  <desc id="desc">Dark celestial field with stars, a curved gaze path and a piano-like note trace.</desc>
+  <rect width="1200" height="675" fill="#070b14"/>
+  <g fill="#dce8ff" opacity=".86">
+    <circle cx="132" cy="120" r="4"/><circle cx="256" cy="214" r="3"/><circle cx="381" cy="108" r="5"/>
+    <circle cx="511" cy="264" r="3"/><circle cx="652" cy="153" r="4"/><circle cx="774" cy="281" r="5"/>
+    <circle cx="914" cy="148" r="3"/><circle cx="1060" cy="238" r="4"/><circle cx="1022" cy="86" r="2"/>
+    <circle cx="173" cy="397" r="2"/><circle cx="323" cy="508" r="4"/><circle cx="467" cy="434" r="2"/>
+    <circle cx="612" cy="546" r="3"/><circle cx="747" cy="432" r="2"/><circle cx="887" cy="529" r="4"/>
+  </g>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M170 407 C278 334 338 239 453 286 S640 414 735 308 S868 160 1012 218" stroke="#72e0d1" stroke-width="8" opacity=".88"/>
+    <path d="M170 407 C278 334 338 239 453 286 S640 414 735 308 S868 160 1012 218" stroke="#d4fff6" stroke-width="2" opacity=".9"/>
+  </g>
+  <g fill="#ff7a8a">
+    <circle cx="170" cy="407" r="8"/><circle cx="453" cy="286" r="7"/><circle cx="735" cy="308" r="8"/><circle cx="1012" cy="218" r="7"/>
+  </g>
+  <g transform="translate(165 555)">
+    <rect x="0" y="0" width="42" height="5" rx="2.5" fill="#72e0d1" opacity=".65"/>
+    <rect x="86" y="-18" width="55" height="5" rx="2.5" fill="#72e0d1" opacity=".78"/>
+    <rect x="181" y="-7" width="32" height="5" rx="2.5" fill="#dce8ff" opacity=".75"/>
+    <rect x="260" y="-32" width="68" height="5" rx="2.5" fill="#72e0d1" opacity=".95"/>
+    <rect x="376" y="-14" width="45" height="5" rx="2.5" fill="#dce8ff" opacity=".82"/>
+    <rect x="468" y="-42" width="72" height="5" rx="2.5" fill="#72e0d1" opacity=".92"/>
+    <rect x="590" y="-22" width="51" height="5" rx="2.5" fill="#dce8ff" opacity=".82"/>
+    <rect x="690" y="-49" width="64" height="5" rx="2.5" fill="#72e0d1" opacity=".96"/>
+    <rect x="804" y="-12" width="41" height="5" rx="2.5" fill="#dce8ff" opacity=".7"/>
+  </g>
+  <text x="62" y="78" fill="#72e0d1" font-family="Arial, sans-serif" font-size="28" letter-spacing="6">STARGAZE</text>
+  <text x="62" y="620" fill="#9aa9bf" font-family="Arial, sans-serif" font-size="18">gaze · attention · celestial objects · self-playing piano</text>
+</svg>

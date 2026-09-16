@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "title": "Stargaze",
+  "description": "A gaze-controlled performance prototype in which an astronomer explores real sky imagery and celestial objects become musical material for a self-playing piano.",
+  "category": "performance",
+  "format": "Interactive performance prototype",
+  "status": "prototype",
+  "people": ["Adrián Artacho"],
+  "tags": ["Gaze", "Attention", "Astronomy", "MIDI", "Disklavier"],
+  "preview": "./preview.svg",
+  "previewAlt": "Abstract night-sky field with a gaze trajectory linking stars toward a piano-like musical trace.",
+  "embed": "./index.html",
+  "project": "../",
+  "repository": "https://github.com/MUK-research/Stargaze",
+  "documentation": "../docs/",
+  "year": 2026
+}
