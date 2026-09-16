@@ -1,0 +1,68 @@
+{
+  "schema": "ephemeris.validation/1",
+  "date": "2026-09-16",
+  "tested_commit": "fa4d7fba84794d4f7f1cea6345c16a389cedbf72",
+  "unit_api": {
+    "passed": true,
+    "python_tests": 13,
+    "javascript_tests": 42,
+    "total": 55,
+    "ci_run": "https://github.com/AdrianArtacho/Ephemeris/actions/runs/35082595082"
+  },
+  "browser_run": "https://github.com/AdrianArtacho/Ephemeris/actions/runs/35082594964",
+  "browser_artifact_id": 10441570009,
+  "reports": {
+    "real-sky": {
+      "passed": true,
+      "checks": [
+        "viewer initialised; catalogue loaded",
+        "mouse dwell produced browser preview note and sky-coordinate trace",
+        "selected mock MIDI output received note-on and scheduled note-off",
+        "Escape disarmed transport",
+        "session JSON export includes samples and events, no face features",
+        "manual coordinates form their own continuous sky-trace segment",
+        "uncalibrated gaze cannot arm",
+        "real astronomical survey tiles fetched"
+      ],
+      "errors": []
+    },
+    "mock-sky": {
+      "passed": true,
+      "checks": [
+        "viewer initialised; catalogue loaded",
+        "mouse dwell produced browser preview note and sky-coordinate trace",
+        "selected mock MIDI output received note-on and scheduled note-off",
+        "Escape disarmed transport",
+        "session JSON export includes samples and events, no face features",
+        "manual coordinates form their own continuous sky-trace segment",
+        "uncalibrated gaze cannot arm"
+      ],
+      "errors": []
+    },
+    "camera": {
+      "passed": true,
+      "checks": [
+        "real MediaPipe runtime/model loaded in classic worker and processed at least three synthetic video frames",
+        "calibration screen starts, remains silent and cancels cleanly",
+        "stop camera releases the video stream and disables calibration",
+        "camera restarts after full worker/stream teardown"
+      ],
+      "errors": []
+    },
+    "devices": {
+      "passed": true,
+      "checks": [
+        "No camera auto-start; built-in webcam selected explicitly despite OBS being browser default",
+        "Camera source change stops the old stream and cancels calibration before explicit restart",
+        "Removed camera remains visibly unavailable; no fallback to a different source",
+        "Camera preference restored across reload without activating the camera",
+        "Empty/input-only MIDI states distinguished; software support explicitly requested",
+        "Closed virtual output opens on arm; explicit test note reaches it with a scheduled note-off and survives passive cursor loss",
+        "MIDI hot-unplug disarms; reconnect and refresh retain chosen port without re-arming or rerouting",
+        "MIDI permission denial is visible, actionable and silent"
+      ],
+      "errors": []
+    }
+  },
+  "scope": "Camera identities, MIDI ports and device-selection inference worker are synthetic/mocked. Real MediaPipe runtime is tested separately with synthetic video; no human gaze, native macOS IAC or physical instrument validation."
+}
